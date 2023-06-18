@@ -20,22 +20,26 @@ def sp_process(sp, output_path, process_fun, pre_process=None,
         if os.path.isfile(file):
             os.remove(file)
         
-    sp_chunk = sp.chunk(time=patch_size, overlap=overlap, **kargs)
-    sp_output = []
-    sp_size = 0
-    for patch in tqdm(sp_chunk):
-        if pre_process is not None:
-            patch = pre_process(patch)
-        pro_patch = process_fun(patch)
-        sp_output.append(pro_patch)
-        sp_size += pro_patch.data.nbytes/1.0e6
-        if sp_size > save_file_size:
+    cont_sp = sp.chunk(time=None) # merge patches into continuous spools
+    print('Found {} continuous datasets'.format(len(cont_sp)))
+    
+    for csp in cont_sp:
+        sp_chunk = csp.chunk(time=patch_size, overlap=overlap, **kargs)
+        sp_output = []
+        sp_size = 0
+        for patch in tqdm(sp_chunk):
+            if pre_process is not None:
+                patch = pre_process(patch)
+            pro_patch = process_fun(patch)
+            sp_output.append(pro_patch)
+            sp_size += pro_patch.data.nbytes/1.0e6
+            if sp_size > save_file_size:
+                output_spool(sp_output,output_path)
+                sp_output = []
+                sp_size=0
+
+        if len(sp_output)>0:
             output_spool(sp_output,output_path)
-            sp_output = []
-            sp_size=0
-       
-    if len(sp_output)>0:
-        output_spool(sp_output,output_path)
        
     print('processing succeeded')
     return sp_output
