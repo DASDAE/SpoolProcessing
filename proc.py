@@ -8,7 +8,7 @@ from .utils import sp_process
 
 def _std_processing(DASdata):
 
-    DASdata = DASdata.tran.velocity_to_strain_rate()
+#     DASdata = DASdata.tran.velocity_to_strain_rate()
     axis = DASdata.dims.index('time')
     newdata = np.std(DASdata.data,axis=axis)
 
@@ -38,6 +38,7 @@ def std(sp,output_path,**kargs):
     Keywords:
     - patch_size=1: number of seconds std is calculated at each channel
     - over_write=True: whether overwrite existing files in the folder
+    - pre_process=None: pre_process function applied to data before std calculation
     - **kargs: Additional keyword arguments to be passed to the 'sp_process' function.
 
     Returns:
@@ -45,8 +46,10 @@ def std(sp,output_path,**kargs):
 
 
     Example usage:
-    >>> sp = dc.get_example_spool()
-    >>> output = std(sp, "output_folder", patch_size=0.5, overwrite=True)
+    sp = dc.get_example_spool()
+    def fun(patch):
+        return patch.tran.velocity_to_strain_rate()
+    output = std(sp, "output_folder", patch_size=0.5, overwrite=True, pre_process=fun)
     """
     
     return sp_process(sp,output_path,_std_processing, **kargs)

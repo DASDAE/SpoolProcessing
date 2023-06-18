@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import dascore as dc
 import os
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from glob import glob
 
 def sp_process(sp, output_path, process_fun, pre_process=None,
@@ -23,11 +23,12 @@ def sp_process(sp, output_path, process_fun, pre_process=None,
     cont_sp = sp.chunk(time=None) # merge patches into continuous spools
     print('Found {} continuous datasets'.format(len(cont_sp)))
     
-    for csp in cont_sp:
+    for i,cont_info in tqdm(cont_sp.get_contents().iterrows(), desc='Spool Loop'):
+        csp = sp.select(time=(cont_info['time_min'],cont_info['time_max']))
         sp_chunk = csp.chunk(time=patch_size, overlap=overlap, **kargs)
         sp_output = []
         sp_size = 0
-        for patch in tqdm(sp_chunk):
+        for patch in tqdm(sp_chunk, desc='Patch Loop', leave=False):
             if pre_process is not None:
                 patch = pre_process(patch)
             pro_patch = process_fun(patch)
