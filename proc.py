@@ -4,7 +4,7 @@ import os
 from tqdm import tqdm
 from glob import glob
 
-from .utils import sp_process
+from utils import sp_process
 
 def _std_processing(DASdata):
 
