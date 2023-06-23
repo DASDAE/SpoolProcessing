@@ -68,7 +68,7 @@ def merge_patch_list(sp_output):
 def output_spool(sp_output, output_path):        
     print(len(sp_output))
     patch_output = merge_patch_list(sp_output)
-#     patch_output = dc.spool(sp_output).chunk(time=None)[0]
+    # patch_output = dc.spool(sp_output).chunk(time=None)[0]
     output_filename = os.path.join(output_path,get_filename(patch_output))
     dc.write(patch_output, output_filename,'dasdae')
     return output_filename
