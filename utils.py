@@ -5,7 +5,7 @@ import os
 from tqdm.auto import tqdm
 from glob import glob
 
-def sp_process(sp, output_path, process_fun, pre_process=None,
+def sp_process(sp, output_path, process_fun, pre_process=None, post_process=None,
                patch_size=1, overlap=None, save_file_size=200, 
                overwrite=True, **kargs):
     
@@ -25,13 +25,18 @@ def sp_process(sp, output_path, process_fun, pre_process=None,
     
     for i,cont_info in tqdm(cont_sp.get_contents().iterrows(), desc='Spool Loop'):
         csp = sp.select(time=(cont_info['time_min'],cont_info['time_max']))
-        sp_chunk = csp.chunk(time=patch_size, overlap=overlap, **kargs)
+        sp_chunk = csp.chunk(time=patch_size, overlap=overlap)
         sp_output = []
         sp_size = 0
         for patch in tqdm(sp_chunk, desc='Patch Loop', leave=False):
             if pre_process is not None:
-                patch = pre_process(patch)
-            pro_patch = process_fun(patch)
+                patch = pre_process(patch,**kargs)
+
+            pro_patch = process_fun(patch,**kargs)
+
+            if post_process is not None:
+                pro_patch = post_process(pro_patch,**kargs)
+
             sp_output.append(pro_patch)
             sp_size += pro_patch.data.nbytes/1.0e6
             if sp_size > save_file_size:
@@ -53,14 +58,19 @@ def merge_patch_list(sp_output):
         data.append(patch.data)
         taxis.append(patch.coords['time'])
 
-    data = np.hstack(data)
     taxis = np.concatenate(taxis)
-
     ind = np.argsort(taxis)
-    data = data[:,ind]
     taxis = taxis[ind]
 
-    coords = {'distance':patch.coords['distance'],'time':taxis}
+    if patch.dims[0] == 'time':
+        data = np.vstack(data)
+        data = data[ind,:]
+        coords = {'time':taxis,'distance':patch.coords['distance']}
+    else:
+        data = np.hstack(data)
+        data = data[:,ind]
+        coords = {'distance':patch.coords['distance'],'time':taxis}
+
 
     merged_patch = patch.new(data=data,coords=coords)
     return merged_patch
@@ -79,3 +89,32 @@ def get_filename(patch, time_string_length=19):
     edstr = str(patch.attrs['time_max'])[:time_string_length]
     filename = bgstr+'__'+edstr+'.h5'
     return filename
+
+
+def get_edge_effect_time(dt, fun, total_T, tol = 1e-6, **kargs):
+
+    N = int(total_T/dt)
+
+    taxis = (np.arange(N)-N//2)*dt
+    data = np.zeros_like(taxis)
+    data[N//2] = 1
+
+    coords = {'time':taxis,'distance':[0]}
+    data = data.reshape((-1,1))
+    attrs = {'d_time':dt,'d_distance':1}
+
+    newdata = dc.Patch(data=data,coords=coords,dims=['time','distance'],attrs=attrs)
+    process_data = newdata.pipe(fun,**kargs)
+
+    data = process_data.data[:,0]
+
+    max_val = np.max(np.abs(data))
+    ind = np.abs(data)>max_val*tol
+    ind = np.where(ind)[0][0]
+
+    new_taxis = process_data.coords['time']
+    new_taxis = (new_taxis - new_taxis[0])/np.timedelta64(1,'s')-N//2*dt
+
+    edge_t = np.abs(new_taxis[ind])
+    
+    return edge_t
