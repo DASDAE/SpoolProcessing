@@ -117,8 +117,8 @@ def down_sample(sp,output_path,freq,edge_time_ratio=1.2, memory_size=1000, **kar
 
     print(f'Chunk size: {chunk_size} s, Overlap: {overlap} s')
 
-    if chunk_size>sp_length:
-        raise ValueError(f'Chunk size {chunk_size} s is larger than spool length {sp_length} s.  Please decrease memory_size or use Patch process ')
+    # if chunk_size>sp_length:
+    #     raise ValueError(f'Chunk size {chunk_size} s is larger than spool length {sp_length} s.  Please decrease memory_size or use Patch process ')
 
     if overlap*2 > chunk_size:
         raise ValueError(f'Overlap {overlap*2} s is larger than chunk size. Please increase memory_size.')
@@ -132,7 +132,7 @@ def down_sample(sp,output_path,freq,edge_time_ratio=1.2, memory_size=1000, **kar
         edtime = patch.attrs['time_max']-edge_time
         return patch.select(time=(bgtime,edtime))
 
-    sp_output = sp_process(sp,'./test',_down_sample_processing,freq=freq,
+    sp_output = sp_process(sp,output_path,_down_sample_processing,freq=freq,
                                  post_process=post_proc,
                                 patch_size=chunk_size,overlap=overlap,edge_win=overlap/2,**kargs)
 

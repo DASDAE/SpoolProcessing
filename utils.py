@@ -5,8 +5,13 @@ import os
 from tqdm.auto import tqdm
 from glob import glob
 
+def get_sp_length(sp):
+    sp_df = sp.get_contents()
+    sp_length = (sp_df['time_max'].max()-sp_df['time_min'].min())/np.timedelta64(1,'s')
+    return sp_length
+
 def sp_process(sp, output_path, process_fun, pre_process=None, post_process=None,
-               patch_size=1, overlap=None, save_file_size=200, 
+               patch_size=1, overlap=None, save_file_size=200, merge_tolerance=3,
                overwrite=True, **kargs):
     
     if not os.path.exists(output_path):
@@ -20,12 +25,16 @@ def sp_process(sp, output_path, process_fun, pre_process=None, post_process=None
         if os.path.isfile(file):
             os.remove(file)
         
-    cont_sp = sp.chunk(time=None) # merge patches into continuous spools
+    cont_sp = sp.chunk(time=None,tolerance=merge_tolerance) # merge patches into continuous spools
     print('Found {} continuous datasets'.format(len(cont_sp)))
     
     for i,cont_info in tqdm(cont_sp.get_contents().iterrows(), desc='Spool Loop'):
         csp = sp.select(time=(cont_info['time_min'],cont_info['time_max']))
-        sp_chunk = csp.chunk(time=patch_size, overlap=overlap)
+        sp_length = get_sp_length(csp)
+        if sp_length>patch_size:
+            sp_chunk = csp.chunk(time=patch_size, overlap=overlap, tolerance=merge_tolerance, keep_partial=True)
+        else:
+            sp_chunk = csp.chunk(time=None, tolerance=merge_tolerance)
         sp_output = []
         sp_size = 0
         for patch in tqdm(sp_chunk, desc='Patch Loop', leave=False):
@@ -76,7 +85,6 @@ def merge_patch_list(sp_output):
     return merged_patch
             
 def output_spool(sp_output, output_path):        
-    print(len(sp_output))
     patch_output = merge_patch_list(sp_output)
 #     patch_output = dc.spool(sp_output).chunk(time=None)[0]
     output_filename = os.path.join(output_path,get_filename(patch_output))
