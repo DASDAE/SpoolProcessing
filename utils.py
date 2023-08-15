@@ -4,6 +4,7 @@ import dascore as dc
 import os
 from tqdm.auto import tqdm
 from glob import glob
+import re
 
 def get_sp_length(sp):
     sp_df = sp.get_contents()
@@ -95,8 +96,20 @@ def output_spool(sp_output, output_path):
 def get_filename(patch, time_string_length=19):
     bgstr = str(patch.attrs['time_min'])[:time_string_length]
     edstr = str(patch.attrs['time_max'])[:time_string_length]
-    filename = bgstr+'__'+edstr+'.h5'
+    filename = bgstr+'_to_'+edstr+'.h5'
+    filename = clean_filename(filename)
     return filename
+
+
+def clean_filename(filename):
+    # Remove illegal characters
+    cleaned_filename = re.sub(r'[\/:*?"<>|]', '_', filename)
+    
+    # Remove leading/trailing spaces and dots
+    cleaned_filename = cleaned_filename.strip('. ').replace(' ', '_')
+    
+    return cleaned_filename
+
 
 
 def get_edge_effect_time(dt, fun, total_T, tol = 1e-6, **kargs):
