@@ -10,6 +10,9 @@ def _std_processing(DASdata,**kargs):
 
 #     DASdata = DASdata.tran.velocity_to_strain_rate()
     axis = DASdata.dims.index('time')
+    if 'pre_process' in kargs:
+        DASdata = kargs['pre_process'](DASdata)
+
     newdata = np.std(DASdata.data,axis=axis)
 
     daxis = DASdata.coords['distance']
