@@ -25,7 +25,7 @@ def sp_process(
     save_file_size=200,
     merge_tolerance=3,
     overwrite=True,
-    **kargs
+    **kargs,
 ):
     if not os.path.exists(output_path):
         os.makedirs(output_path)
@@ -142,18 +142,48 @@ def get_edge_effect_time(dt, fun, total_T, tol=1e-3, **kargs):
     data = data.reshape((-1, 1))
     attrs = {"d_time": dt, "d_distance": 1}
 
-    newdata = dc.Patch(data=data, coords=coords, dims=["time", "distance"], attrs=attrs)
-    process_data = newdata.pipe(fun, **kargs)
+    new_data = dc.Patch(
+        data=data, coords=coords, dims=["time", "distance"], attrs=attrs
+    )
+    process_data = new_data.pipe(fun, **kargs)
 
     data = process_data.data[:, 0]
 
     max_val = np.max(np.abs(data))
     ind = np.abs(data) > max_val * tol
-    ind = np.where(ind)[0][0]
+    ind_1 = np.where(ind)[0][0]
+    ind_2 = np.where(ind)[0][-1]
 
     new_taxis = process_data.coords["time"]
     new_taxis = (new_taxis - new_taxis[0]) / np.timedelta64(1, "s") - N // 2 * dt
 
-    edge_t = np.abs(new_taxis[ind])
+    edge_t = max(np.abs(new_taxis[ind_1]), np.abs(new_taxis[ind_2]))
+
+    if edge_t * 2 >= total_T:
+        raise ValueError(
+            f"edge_t {edge_t} s is equal or larger than half of\
+            the processing chunk size {total_T} s.\
+            Please increase memory_size or tolerance."
+        )
 
     return edge_t
+
+
+def get_chunk_time(
+    memory_size,
+    sampling_rate,
+    num_ch,
+    bytes_per_element=8,
+    processing_factor=5,
+    memory_safety_factor=1.2,
+):
+    mem_size_per_second = (
+        sampling_rate
+        * num_ch
+        * bytes_per_element
+        * processing_factor
+        * memory_safety_factor
+        / 1e6
+    )  # in MB
+    patch_length = memory_size / mem_size_per_second  # in sec
+    return patch_length

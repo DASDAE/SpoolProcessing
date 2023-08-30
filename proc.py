@@ -4,7 +4,7 @@ A Python script for different processings on a spool of DAS data.
 
 import numpy as np
 
-from .utils import sp_process, get_edge_effect_time
+from .utils import sp_process, get_edge_effect_time, get_chunk_time
 
 
 def _std_processing(DASdata, **kargs):
@@ -60,35 +60,34 @@ def std(sp, output_path, **kargs):
     return sp_process(sp, output_path, _std_processing, **kargs)
 
 
-def _down_sample_processing(patch, freq=5, nqfreq_ratio=0.8, **kargs):
+def _low_freq_processing(patch, freq=5, nqfreq_ratio=0.8, **kargs):
     dt = np.timedelta64(int(1 / freq * 1e9), "ns")
     corner_f = freq * 0.5 * nqfreq_ratio
 
     proc_patch = patch
-
     proc_patch = proc_patch.pass_filter(time=(None, corner_f))
-    new_taxis = np.arange(patch.attrs["time_min"], patch.attrs["time_max"], dt)
-    proc_patch = proc_patch.interpolate(time=new_taxis)
+
+    new_t_axis = np.arange(patch.attrs["time_min"], patch.attrs["time_max"], dt)
+    proc_patch = proc_patch.interpolate(time=new_t_axis)
 
     return proc_patch
 
 
-def down_sample(sp, output_path, freq, edge_time_ratio=1.2, memory_size=1000, **kargs):
+def low_freq(sp, output_path, freq, edge_time_ratio=1.2, memory_size=1000, **kargs):
     """
-    Downsample the spool by calculating the standard deviation value over a patch size
+    Low-pass filter the spool.
 
     Parameters:
-    - sp: input dascore spool
-    - output_path (str): The folder where the processed output will be saved.
-    - freq: new sampling rate in Hz
+    - sp: Input dascore spool
+    - output_path (str): The directory path where the processed output will be saved
+    - freq: Target sampling rate in Hz
+    So the target corner frequency = Nyq_new = 0.5*freq
 
     Keywords:
-    - memory_size = 1000: processing chunk size in MB
-    - nqfreq_ratio = 0.8: ratio of low-pass filter corner frequency to Nquist frequency
+    - memory_size = 1000: Available Memory in MB for low-freq processing
     - edge_time_ratio = 1.2: overlap window multiplier
-    - over_write=True: whether overwrite existing files in the folder
-    - pre_process=None: pre_process function applied to data before std calculation
-    - **kargs: Additional keyword arguments to be passed to the 'sp_process' function.
+    - pre_process = None: pre_process function applied to data before std calculation
+    - **kargs: Additional keyword arguments to be passed to the 'sp_process' function
 
     Returns:
     - True indicating successful processing
@@ -104,16 +103,17 @@ def down_sample(sp, output_path, freq, edge_time_ratio=1.2, memory_size=1000, **
         )
     """
 
+    item = sp.get_contents().iloc[0]
+    num_ch = int((item["distance_max"] - item["distance_min"]) / item["d_distance"])
+
     dt = sp.get_contents()["d_time"].iloc[0] / np.timedelta64(1, "s")
-    edge_time = get_edge_effect_time(
-        dt, _down_sample_processing, 1 / freq * 100, freq=freq
+
+    chunk_size = get_chunk_time(
+        memory_size=memory_size, sampling_rate=dt, num_ch=num_ch
     )
 
-    item = sp.get_contents().iloc[0]
-    chanN = int((item["distance_max"] - item["distance_min"]) / item["d_distance"])
+    edge_time = get_edge_effect_time(dt, _low_freq_processing, chunk_size, freq=freq)
 
-    mem_size_per_second = 1 / dt * chanN * 4 / 1e6
-    chunk_size = memory_size / mem_size_per_second
     overlap = edge_time * edge_time_ratio * 2
 
     print(f"Chunk size: {chunk_size} s, Overlap: {overlap} s")
@@ -139,7 +139,7 @@ def down_sample(sp, output_path, freq, edge_time_ratio=1.2, memory_size=1000, **
     sp_output = sp_process(
         sp,
         output_path,
-        _down_sample_processing,
+        _low_freq_processing,
         freq=freq,
         post_process=post_proc,
         patch_size=chunk_size,
